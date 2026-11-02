@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_ready: ${{ steps.pages.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,13 +37,21 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      # Fails when the repository is still on the legacy branch deployment.
+      # The site is served from the repo root in that mode, so this is not fatal.
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - if: steps.pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
     needs: build
+    # Skip cleanly on legacy branch deployments instead of failing the run.
+    if: needs.build.outputs.pages_ready == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
